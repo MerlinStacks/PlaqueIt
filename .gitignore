@@ -1,0 +1,23 @@
+.DS_Store
+Thumbs.db
+
+# Dependencies
+vendor/
+node_modules/
+
+# Test/cache output
+.phpunit.result.cache
+.phpunit.cache/
+coverage/
+
+# Environment/local editor files
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+
+# WordPress/plugin package artifacts
+*.zip
+dist/
+build/

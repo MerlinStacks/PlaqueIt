@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<ruleset name="PlaqueIt">
+  <description>WordPress Coding Standards for PlaqueIt.</description>
+  <rule ref="WordPress"/>
+  <rule ref="WordPress-Core"/>
+  <rule ref="WordPress-Extra"/>
+  <rule ref="PHPCompatibilityWP"/>
+  <config name="testVersion" value="8.0-"/>
+  <file>.</file>
+  <exclude-pattern>vendor/*</exclude-pattern>
+  <exclude-pattern>node_modules/*</exclude-pattern>
+  <exclude-pattern>tests/*</exclude-pattern>
+</ruleset>
