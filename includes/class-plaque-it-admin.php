@@ -20,7 +20,6 @@ class Plaque_It_Admin {
 		add_action( 'woocommerce_product_after_variable_attributes', [ $this, 'variation_fields' ], 10, 3 );
 		add_action( 'woocommerce_save_product_variation', [ $this, 'save_variation_fields' ], 10, 2 );
 		add_action( 'admin_enqueue_scripts', [ $this, 'assets' ] );
-		add_action( 'wp_ajax_plaque_it_json_search_products', [ $this, 'json_search_products' ] );
 	}
 
 	/** Admin assets. */
@@ -32,9 +31,7 @@ class Plaque_It_Admin {
 
 		wp_enqueue_style( 'wp-color-picker' );
 		wp_enqueue_style( 'plaque-it-admin', PLAQUE_IT_URL . 'assets/css/plaque-it-admin.css', [], $css_ver );
-		wp_enqueue_script( 'wc-enhanced-select' );
-		wp_add_inline_script( 'wc-enhanced-select', 'jQuery(function($){$(document.body).trigger("wc-enhanced-select-init");});' );
-		wp_enqueue_script( 'plaque-it-admin', PLAQUE_IT_URL . 'assets/js/plaque-it-admin.js', [ 'jquery', 'wp-color-picker', 'wc-enhanced-select' ], $js_ver, true );
+		wp_enqueue_script( 'plaque-it-admin', PLAQUE_IT_URL . 'assets/js/plaque-it-admin.js', [ 'jquery', 'wp-color-picker' ], $js_ver, true );
 	}
 
 	/** Register menu. */
@@ -124,23 +121,32 @@ class Plaque_It_Admin {
 	/** Render products page. */
 	public function render_products(): void {
 		$this->notice();
-		$manual_id  = absint( $_GET['manual_product_id'] ?? 0 );
-		$product_id = $manual_id ?: absint( $_GET['product_id'] ?? 0 );
-		$product    = $product_id ? wc_get_product( $product_id ) : null;
-		$settings   = Plaque_It_Settings::all();
+		$manual_id      = absint( $_GET['manual_product_id'] ?? 0 );
+		$product_id     = $manual_id ?: absint( $_GET['product_id'] ?? 0 );
+		$product_search = isset( $_GET['product_search'] ) ? sanitize_text_field( wp_unslash( $_GET['product_search'] ) ) : '';
+		$product        = $product_id ? wc_get_product( $product_id ) : null;
+		$settings       = Plaque_It_Settings::all();
+		$search_results = '' !== $product_search ? $this->search_products( $product_search ) : [];
 		?>
 		<div class="wrap plaque-it-admin">
 			<h1><?php esc_html_e( 'PlaqueIt Products', 'plaque-it' ); ?></h1>
 			<p><?php esc_html_e( 'Enable PlaqueIt only on plaque products. Products already configured in PersonaliseIt are blocked automatically.', 'plaque-it' ); ?></p>
 			<form method="get" class="plaque-it-card">
 				<input type="hidden" name="page" value="plaque-it-products" />
-				<label><?php esc_html_e( 'Search products', 'plaque-it' ); ?>
-					<select class="wc-product-search" name="product_id" style="width:360px;" data-placeholder="<?php esc_attr_e( 'Search for a product...', 'plaque-it' ); ?>" data-action="plaque_it_json_search_products" data-security="<?php echo esc_attr( wp_create_nonce( 'plaque_it_search_products' ) ); ?>" data-allow_clear="true">
-						<?php if ( $product ) : ?>
-							<option value="<?php echo esc_attr( $product->get_id() ); ?>" selected="selected"><?php echo esc_html( '#' . $product->get_id() . ' - ' . $product->get_name() ); ?></option>
-						<?php endif; ?>
-					</select>
-				</label>
+				<label><?php esc_html_e( 'Search products', 'plaque-it' ); ?> <input type="search" name="product_search" value="<?php echo esc_attr( $product_search ); ?>" placeholder="<?php esc_attr_e( 'Name, SKU, or ID', 'plaque-it' ); ?>" /></label>
+				<?php if ( '' !== $product_search ) : ?>
+					<label><?php esc_html_e( 'Search results', 'plaque-it' ); ?>
+						<select name="product_id">
+							<option value="0"><?php esc_html_e( 'Choose a product...', 'plaque-it' ); ?></option>
+							<?php foreach ( $search_results as $result_id => $result_name ) : ?>
+								<option value="<?php echo esc_attr( $result_id ); ?>" <?php selected( $product_id, $result_id ); ?>><?php echo esc_html( $result_name ); ?></option>
+							<?php endforeach; ?>
+						</select>
+					</label>
+					<?php if ( empty( $search_results ) ) : ?>
+						<p><?php esc_html_e( 'No products found. Try a different name, SKU, or product ID.', 'plaque-it' ); ?></p>
+					<?php endif; ?>
+				<?php endif; ?>
 				<label><?php esc_html_e( 'Or enter Product ID', 'plaque-it' ); ?> <input type="number" name="manual_product_id" value="" /></label>
 				<?php submit_button( __( 'Load Product', 'plaque-it' ), 'secondary', '', false ); ?>
 			</form>
@@ -171,19 +177,8 @@ class Plaque_It_Admin {
 		<?php
 	}
 
-	/** AJAX product search for the products admin page. */
-	public function json_search_products(): void {
-		check_ajax_referer( 'plaque_it_search_products', 'security' );
-
-		if ( ! current_user_can( 'manage_woocommerce' ) ) {
-			wp_send_json_error( __( 'You do not have permission to search products.', 'plaque-it' ), 403 );
-		}
-
-		$term = isset( $_GET['term'] ) ? sanitize_text_field( wp_unslash( $_GET['term'] ) ) : '';
-		if ( '' === $term ) {
-			wp_send_json( [] );
-		}
-
+	/** Search WooCommerce products for the products admin page. */
+	private function search_products( string $term ): array {
 		$data_store  = WC_Data_Store::load( 'product' );
 		$product_ids = $data_store->search_products( $term, '', false, true, 50 );
 		$products    = [];
@@ -197,7 +192,7 @@ class Plaque_It_Admin {
 			$products[ $product_id ] = '#' . $product_id . ' - ' . $product->get_formatted_name();
 		}
 
-		wp_send_json( $products );
+		return $products;
 	}
 
 	/** Render fonts page. */
