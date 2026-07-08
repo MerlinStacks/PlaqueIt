@@ -26,6 +26,7 @@ class Plaque_It_Admin {
 	public function assets(): void {
 		wp_enqueue_style( 'wp-color-picker' );
 		wp_enqueue_style( 'plaque-it-admin', PLAQUE_IT_URL . 'assets/css/plaque-it-admin.css', [], PLAQUE_IT_VERSION );
+		wp_enqueue_script( 'wc-enhanced-select' );
 		wp_enqueue_script( 'plaque-it-admin', PLAQUE_IT_URL . 'assets/js/plaque-it-admin.js', [ 'jquery', 'wp-color-picker' ], PLAQUE_IT_VERSION, true );
 	}
 
@@ -120,27 +121,17 @@ class Plaque_It_Admin {
 		$product_id = $manual_id ?: absint( $_GET['product_id'] ?? 0 );
 		$product    = $product_id ? wc_get_product( $product_id ) : null;
 		$settings   = Plaque_It_Settings::all();
-		$products   = wc_get_products(
-			[
-				'limit'   => 50,
-				'orderby' => 'date',
-				'order'   => 'DESC',
-				'status'  => [ 'publish', 'draft', 'private' ],
-				'return'  => 'objects',
-			]
-		);
 		?>
 		<div class="wrap plaque-it-admin">
 			<h1><?php esc_html_e( 'PlaqueIt Products', 'plaque-it' ); ?></h1>
 			<p><?php esc_html_e( 'Enable PlaqueIt only on plaque products. Products already configured in PersonaliseIt are blocked automatically.', 'plaque-it' ); ?></p>
 			<form method="get" class="plaque-it-card">
 				<input type="hidden" name="page" value="plaque-it-products" />
-				<label><?php esc_html_e( 'Recent products', 'plaque-it' ); ?>
-					<select name="product_id">
-						<option value="0"><?php esc_html_e( 'Choose a product...', 'plaque-it' ); ?></option>
-						<?php foreach ( $products as $admin_product ) : ?>
-							<option value="<?php echo esc_attr( $admin_product->get_id() ); ?>" <?php selected( $product_id, $admin_product->get_id() ); ?>><?php echo esc_html( '#' . $admin_product->get_id() . ' - ' . $admin_product->get_name() ); ?></option>
-						<?php endforeach; ?>
+				<label><?php esc_html_e( 'Search products', 'plaque-it' ); ?>
+					<select class="wc-product-search" name="product_id" data-placeholder="<?php esc_attr_e( 'Search for a product...', 'plaque-it' ); ?>" data-action="woocommerce_json_search_products" data-allow_clear="true">
+						<?php if ( $product ) : ?>
+							<option value="<?php echo esc_attr( $product->get_id() ); ?>" selected="selected"><?php echo esc_html( '#' . $product->get_id() . ' - ' . $product->get_name() ); ?></option>
+						<?php endif; ?>
 					</select>
 				</label>
 				<label><?php esc_html_e( 'Or enter Product ID', 'plaque-it' ); ?> <input type="number" name="manual_product_id" value="" /></label>
@@ -178,41 +169,101 @@ class Plaque_It_Admin {
 		$this->notice();
 		$fonts = Plaque_It_Fonts::all();
 		?>
-		<div class="wrap plaque-it-admin">
-			<h1><?php esc_html_e( 'PlaqueIt Fonts', 'plaque-it' ); ?></h1>
-			<form method="post" enctype="multipart/form-data" class="plaque-it-card">
-				<?php wp_nonce_field( 'plaque_it_upload_font' ); ?>
-				<div class="plaque-it-grid">
-					<label><?php esc_html_e( 'Name', 'plaque-it' ); ?><input type="text" name="name" /></label>
-					<label><?php esc_html_e( 'Font File', 'plaque-it' ); ?><input type="file" name="font_file" accept=".ttf,.otf,.woff,.woff2" required /></label>
-					<label><?php esc_html_e( 'Weight', 'plaque-it' ); ?><input type="text" name="weight" value="400" /></label>
-					<label><?php esc_html_e( 'Style', 'plaque-it' ); ?><select name="style"><option value="normal">Normal</option><option value="italic">Italic</option></select></label>
-					<label><?php esc_html_e( 'Width factor', 'plaque-it' ); ?><input type="number" step="0.001" name="width_factor" value="0.56" /></label>
-					<label><?php esc_html_e( 'Minimum size', 'plaque-it' ); ?><input type="number" step="0.1" name="min_size" value="8" /></label>
+		<div class="wrap plaque-it-admin plaque-it-font-manager">
+			<div class="plaque-it-page-header">
+				<div>
+					<h1><?php esc_html_e( 'Font Manager', 'plaque-it' ); ?></h1>
+					<p><?php esc_html_e( 'Manage the plaque fonts available to customers and production.', 'plaque-it' ); ?></p>
 				</div>
-				<p><label><input type="checkbox" name="active" value="1" checked /> <?php esc_html_e( 'Available to customers', 'plaque-it' ); ?></label></p>
-				<p><label><input type="checkbox" name="production_restricted" value="1" /> <?php esc_html_e( 'Production restricted', 'plaque-it' ); ?></label></p>
-				<?php submit_button( __( 'Upload Font', 'plaque-it' ), 'primary', 'plaque_it_upload_font' ); ?>
-			</form>
-			<div class="plaque-it-font-grid">
-				<?php foreach ( $fonts as $font ) : ?>
-					<style>@font-face{font-family:'plaque-it-admin-<?php echo (int) $font->id; ?>';src:url('<?php echo esc_url( $font->file_url ); ?>');font-weight:<?php echo esc_attr( $font->weight ); ?>;font-style:<?php echo esc_attr( $font->style ); ?>;}</style>
-					<div class="plaque-it-card">
-						<form method="post">
-							<?php wp_nonce_field( 'plaque_it_update_font' ); ?>
-							<input type="hidden" name="font_id" value="<?php echo (int) $font->id; ?>" />
-							<p style="font-family:'plaque-it-admin-<?php echo (int) $font->id; ?>';font-size:28px;margin:0 0 8px;">AaBbCc 123</p>
-							<label><?php esc_html_e( 'Name', 'plaque-it' ); ?><input type="text" name="name" value="<?php echo esc_attr( $font->name ); ?>" /></label>
-							<label><?php esc_html_e( 'Width factor', 'plaque-it' ); ?><input type="number" step="0.001" name="width_factor" value="<?php echo esc_attr( $font->width_factor ); ?>" /></label>
-							<label><?php esc_html_e( 'Minimum size', 'plaque-it' ); ?><input type="number" step="0.1" name="min_size" value="<?php echo esc_attr( $font->min_size ); ?>" /></label>
-							<p><label><input type="checkbox" name="production_restricted" value="1" <?php checked( ! empty( $font->production_restricted ) ); ?> /> <?php esc_html_e( 'Production restricted', 'plaque-it' ); ?></label></p>
-							<?php submit_button( __( 'Save Font', 'plaque-it' ), 'secondary small', 'plaque_it_update_font', false ); ?>
-						</form>
-						<p><?php echo $font->active ? esc_html__( 'Active', 'plaque-it' ) : esc_html__( 'Inactive', 'plaque-it' ); ?></p>
-						<a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=plaque-it-fonts&plaque_it_toggle_font=' . (int) $font->id ), 'plaque_it_toggle_font_' . (int) $font->id ) ); ?>"><?php echo $font->active ? esc_html__( 'Deactivate', 'plaque-it' ) : esc_html__( 'Activate', 'plaque-it' ); ?></a>
-						<a class="button button-link-delete" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=plaque-it-fonts&plaque_it_delete_font=' . (int) $font->id ), 'plaque_it_delete_font_' . (int) $font->id ) ); ?>" onclick="return confirm('<?php esc_attr_e( 'Delete this font?', 'plaque-it' ); ?>');"><?php esc_html_e( 'Delete', 'plaque-it' ); ?></a>
+				<button type="button" class="button button-primary plaque-it-upload-font-btn">+ <?php esc_html_e( 'Upload Font', 'plaque-it' ); ?></button>
+			</div>
+
+			<div class="plaque-it-tabs-bar">
+				<button type="button" class="plaque-it-tab plaque-it-tab-active"><?php esc_html_e( 'Fonts', 'plaque-it' ); ?> <span><?php echo esc_html( count( $fonts ) ); ?></span></button>
+			</div>
+
+			<div class="plaque-it-card plaque-it-installed-fonts">
+				<div class="plaque-it-card-header">
+					<h2><?php esc_html_e( 'Installed Fonts', 'plaque-it' ); ?></h2>
+					<span><?php echo esc_html( count( $fonts ) ); ?> <?php echo esc_html( 1 === count( $fonts ) ? __( 'font', 'plaque-it' ) : __( 'fonts', 'plaque-it' ) ); ?></span>
+				</div>
+				<?php if ( empty( $fonts ) ) : ?>
+					<div class="plaque-it-empty">
+						<span class="plaque-it-empty-icon">Aa</span>
+						<h3><?php esc_html_e( 'No fonts uploaded yet', 'plaque-it' ); ?></h3>
+						<p><?php esc_html_e( 'Upload a TTF, OTF, WOFF, or WOFF2 font to make plaque customisation available.', 'plaque-it' ); ?></p>
 					</div>
-				<?php endforeach; ?>
+				<?php else : ?>
+					<div class="plaque-it-font-grid">
+						<?php foreach ( $fonts as $font ) : ?>
+							<div class="plaque-it-font-card<?php echo $font->active ? '' : ' plaque-it-font-card-inactive'; ?>">
+								<div class="plaque-it-font-preview">
+									<span style="font-family:'PlaqueItFont<?php echo (int) $font->id; ?>',sans-serif;font-weight:<?php echo esc_attr( $font->weight ); ?>;font-style:<?php echo esc_attr( $font->style ); ?>;">AaBbCc 123</span>
+								</div>
+								<form method="post" class="plaque-it-font-card-body">
+									<?php wp_nonce_field( 'plaque_it_update_font' ); ?>
+									<input type="hidden" name="font_id" value="<?php echo (int) $font->id; ?>" />
+									<div class="plaque-it-font-title-row">
+										<input type="text" name="name" value="<?php echo esc_attr( $font->name ); ?>" aria-label="<?php esc_attr_e( 'Font name', 'plaque-it' ); ?>" />
+										<span class="plaque-it-badge <?php echo $font->active ? 'plaque-it-badge-active' : 'plaque-it-badge-inactive'; ?>"><?php echo $font->active ? esc_html__( 'Active', 'plaque-it' ) : esc_html__( 'Inactive', 'plaque-it' ); ?></span>
+									</div>
+									<div class="plaque-it-font-meta">
+										<span class="plaque-it-badge"><?php echo esc_html( strtoupper( pathinfo( (string) $font->file_url, PATHINFO_EXTENSION ) ) ); ?></span>
+										<span class="plaque-it-code"><?php echo esc_html( $font->weight ); ?></span>
+										<?php if ( 'italic' === $font->style ) : ?><span class="plaque-it-badge"><?php esc_html_e( 'Italic', 'plaque-it' ); ?></span><?php endif; ?>
+										<?php if ( ! empty( $font->production_restricted ) ) : ?><span class="plaque-it-badge plaque-it-badge-warning"><?php esc_html_e( 'Production restricted', 'plaque-it' ); ?></span><?php endif; ?>
+									</div>
+									<div class="plaque-it-font-fields">
+										<label><?php esc_html_e( 'Width factor', 'plaque-it' ); ?><input type="number" step="0.001" name="width_factor" value="<?php echo esc_attr( $font->width_factor ); ?>" /></label>
+										<label><?php esc_html_e( 'Minimum size', 'plaque-it' ); ?><input type="number" step="0.1" name="min_size" value="<?php echo esc_attr( $font->min_size ); ?>" /></label>
+									</div>
+									<label class="plaque-it-checkbox"><input type="checkbox" name="production_restricted" value="1" <?php checked( ! empty( $font->production_restricted ) ); ?> /> <?php esc_html_e( 'Production restricted', 'plaque-it' ); ?></label>
+									<div class="plaque-it-font-actions">
+										<?php submit_button( __( 'Save', 'plaque-it' ), 'secondary small', 'plaque_it_update_font', false ); ?>
+										<a class="button button-secondary" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=plaque-it-fonts&plaque_it_toggle_font=' . (int) $font->id ), 'plaque_it_toggle_font_' . (int) $font->id ) ); ?>"><?php echo $font->active ? esc_html__( 'Deactivate', 'plaque-it' ) : esc_html__( 'Activate', 'plaque-it' ); ?></a>
+										<a class="button button-link-delete" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=plaque-it-fonts&plaque_it_delete_font=' . (int) $font->id ), 'plaque_it_delete_font_' . (int) $font->id ) ); ?>" onclick="return confirm('<?php esc_attr_e( 'Delete this font?', 'plaque-it' ); ?>');"><?php esc_html_e( 'Delete', 'plaque-it' ); ?></a>
+									</div>
+								</form>
+							</div>
+						<?php endforeach; ?>
+					</div>
+				<?php endif; ?>
+			</div>
+
+			<div class="plaque-it-modal-overlay" hidden aria-modal="true" role="dialog" aria-label="<?php esc_attr_e( 'Upload Font', 'plaque-it' ); ?>">
+				<form method="post" enctype="multipart/form-data" class="plaque-it-modal">
+					<?php wp_nonce_field( 'plaque_it_upload_font' ); ?>
+					<div class="plaque-it-modal-header">
+						<h3><?php esc_html_e( 'Upload Font', 'plaque-it' ); ?></h3>
+						<button type="button" class="plaque-it-modal-close" aria-label="<?php esc_attr_e( 'Close', 'plaque-it' ); ?>">×</button>
+					</div>
+					<div class="plaque-it-modal-body">
+						<label class="plaque-it-drop-zone">
+							<span class="plaque-it-drop-icon">Aa</span>
+							<span class="plaque-it-drop-title"><?php esc_html_e( 'Drop a font file here, or click to browse', 'plaque-it' ); ?></span>
+							<span class="plaque-it-drop-hint"><?php esc_html_e( 'TTF, OTF, WOFF, or WOFF2', 'plaque-it' ); ?></span>
+							<input type="file" name="font_file" accept=".ttf,.otf,.woff,.woff2" required />
+						</label>
+						<div class="plaque-it-upload-preview"><span>AaBbCc 123</span></div>
+						<div class="plaque-it-upload-fields">
+							<label><?php esc_html_e( 'Font family name', 'plaque-it' ); ?><input type="text" name="name" placeholder="<?php esc_attr_e( 'e.g. Block Bold', 'plaque-it' ); ?>" /></label>
+							<div class="plaque-it-upload-row">
+								<label><?php esc_html_e( 'Weight', 'plaque-it' ); ?><select name="weight"><?php foreach ( [ '100', '200', '300', '400', '500', '600', '700', '800', '900', 'normal', 'bold' ] as $weight ) : ?><option value="<?php echo esc_attr( $weight ); ?>" <?php selected( '400', $weight ); ?>><?php echo esc_html( $weight ); ?></option><?php endforeach; ?></select></label>
+								<label><?php esc_html_e( 'Style', 'plaque-it' ); ?><select name="style"><option value="normal"><?php esc_html_e( 'Normal', 'plaque-it' ); ?></option><option value="italic"><?php esc_html_e( 'Italic', 'plaque-it' ); ?></option></select></label>
+							</div>
+							<div class="plaque-it-upload-row">
+								<label><?php esc_html_e( 'Width factor', 'plaque-it' ); ?><input type="number" step="0.001" name="width_factor" value="0.56" /></label>
+								<label><?php esc_html_e( 'Minimum size', 'plaque-it' ); ?><input type="number" step="0.1" name="min_size" value="8" /></label>
+							</div>
+							<label class="plaque-it-checkbox"><input type="checkbox" name="active" value="1" checked /> <?php esc_html_e( 'Available to customers', 'plaque-it' ); ?></label>
+							<label class="plaque-it-checkbox"><input type="checkbox" name="production_restricted" value="1" /> <?php esc_html_e( 'Production restricted', 'plaque-it' ); ?></label>
+						</div>
+					</div>
+					<div class="plaque-it-modal-footer">
+						<button type="button" class="button plaque-it-modal-cancel"><?php esc_html_e( 'Cancel', 'plaque-it' ); ?></button>
+						<?php submit_button( __( 'Upload Font', 'plaque-it' ), 'primary', 'plaque_it_upload_font', false ); ?>
+					</div>
+				</form>
 			</div>
 		</div>
 		<?php

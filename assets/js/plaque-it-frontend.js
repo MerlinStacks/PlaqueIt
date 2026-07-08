@@ -23,7 +23,7 @@
     if (document.getElementById('plaque-it-font-' + font.id)) return;
     const style = document.createElement('style');
     style.id = 'plaque-it-font-' + font.id;
-    style.textContent = `@font-face{font-family:'PlaqueItFont${font.id}';src:url('${font.url}');font-weight:${font.weight};font-style:${font.style};}`;
+    style.textContent = `@font-face{font-family:'${font.family || `PlaqueItFont${font.id}`}';src:url('${font.url}');font-weight:${font.weight};font-style:${font.style};font-display:swap;}`;
     document.head.appendChild(style);
   }
 

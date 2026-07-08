@@ -45,6 +45,7 @@ class Plaque_It {
 	private function init_hooks(): void {
 		Plaque_It_DB::maybe_install();
 		add_filter( 'plugin_action_links_' . plugin_basename( PLAQUE_IT_PATH . 'plaque-it.php' ), [ $this, 'plugin_action_links' ] );
+		( new Plaque_It_Fonts() )->register();
 		( new Plaque_It_Frontend() )->register();
 		( new Plaque_It_Cart() )->register();
 		( new Plaque_It_Admin() )->register();
