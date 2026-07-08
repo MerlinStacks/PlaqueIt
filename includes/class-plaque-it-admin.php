@@ -244,9 +244,10 @@ class Plaque_It_Admin {
 	/** Search WooCommerce products for the products admin page. */
 	private function search_products( string $term ): array {
 		$data_store  = WC_Data_Store::load( 'product' );
-		$product_ids = $data_store->search_products( $term, '', false, true, 50 );
+		$product_ids = $data_store->search_products( $term, '', false, true, 200 );
 		$products    = [];
 		$types       = wc_get_product_types();
+		$term        = strtolower( $term );
 
 		foreach ( $product_ids as $product_id ) {
 			$product = wc_get_product( $product_id );
@@ -265,11 +266,65 @@ class Plaque_It_Admin {
 				'status'   => $product->get_status(),
 				'enabled'  => $enabled,
 				'conflict' => $conflict,
+				'score'    => $this->product_search_score( $product, $term ),
 				'url'      => add_query_arg( [ 'page' => 'plaque-it-products', 'product_id' => $product_id ], admin_url( 'admin.php' ) ),
 			];
 		}
 
+		uasort(
+			$products,
+			static function ( array $a, array $b ): int {
+				if ( $a['score'] === $b['score'] ) {
+					return strcasecmp( $a['name'], $b['name'] );
+				}
+
+				return $b['score'] <=> $a['score'];
+			}
+		);
+
+		$products = array_slice( $products, 0, 50, true );
+		foreach ( $products as &$product ) {
+			unset( $product['score'] );
+		}
+
 		return $products;
+	}
+
+	/** Score product search relevance. */
+	private function product_search_score( WC_Product $product, string $term ): int {
+		$name = strtolower( $product->get_name() );
+		$sku  = strtolower( (string) $product->get_sku() );
+		$id   = (string) $product->get_id();
+
+		if ( $id === $term ) {
+			return 1000;
+		}
+
+		if ( $name === $term ) {
+			return 900;
+		}
+
+		if ( str_starts_with( $name, $term ) ) {
+			return 800;
+		}
+
+		if ( false !== strpos( $name, $term ) ) {
+			return 700;
+		}
+
+		if ( $sku === $term ) {
+			return 600;
+		}
+
+		if ( str_starts_with( $sku, $term ) ) {
+			return 500;
+		}
+
+		if ( false !== strpos( $sku, $term ) ) {
+			return 400;
+		}
+
+		return 100;
 	}
 
 	/** Render fonts page. */

@@ -107,6 +107,9 @@
   }
 
   function render(root, config) {
+    const preview = document.querySelector(`.plaque-it-gallery-preview[data-product-id="${root.dataset.productId}"] .plaque-it-preview`) || root.querySelector('.plaque-it-preview');
+    if (!preview) return;
+
     const w = Math.max(1, mmToPx(config.width));
     const h = Math.max(1, mmToPx(config.height));
     let y = h / 2;
@@ -119,7 +122,7 @@
       y += Number(line.size) * 0.25;
       return out;
     }).join('');
-    root.querySelector('.plaque-it-preview').innerHTML = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${shape(config.corner_style, w, h, config.plaque_colour)}${text}</svg>`;
+    preview.innerHTML = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${shape(config.corner_style, w, h, config.plaque_colour)}${text}</svg>`;
   }
 
   function update(root) {

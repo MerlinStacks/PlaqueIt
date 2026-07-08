@@ -13,7 +13,23 @@ class Plaque_It_Frontend {
 	/** Register hooks. */
 	public function register(): void {
 		add_action( 'wp_enqueue_scripts', [ $this, 'assets' ] );
-		add_action( 'woocommerce_before_add_to_cart_button', [ $this, 'render' ], 20 );
+		add_action( 'wp', [ $this, 'replace_product_gallery' ] );
+		add_action( 'woocommerce_before_add_to_cart_button', [ $this, 'render_controls' ], 20 );
+	}
+
+	/** Replace the product gallery with the plaque preview on enabled products. */
+	public function replace_product_gallery(): void {
+		if ( ! is_product() ) {
+			return;
+		}
+
+		$product_id = get_queried_object_id();
+		if ( ! $product_id || ! Plaque_It_Validator::is_enabled_product( $product_id ) ) {
+			return;
+		}
+
+		remove_action( 'woocommerce_before_single_product_summary', 'woocommerce_show_product_images', 20 );
+		add_action( 'woocommerce_before_single_product_summary', [ $this, 'render_gallery_preview' ], 20 );
 	}
 
 	/** Enqueue assets. */
@@ -32,8 +48,21 @@ class Plaque_It_Frontend {
 		wp_localize_script( 'plaque-it-frontend', 'plaqueItData', $this->script_data( $product_id ) );
 	}
 
-	/** Render configurator. */
-	public function render(): void {
+	/** Render live preview in place of the product gallery. */
+	public function render_gallery_preview(): void {
+		global $product;
+		if ( ! $product instanceof WC_Product || ! Plaque_It_Validator::is_enabled_product( $product->get_id() ) ) {
+			return;
+		}
+		?>
+		<div class="woocommerce-product-gallery plaque-it-gallery-preview" data-product-id="<?php echo esc_attr( $product->get_id() ); ?>">
+			<div class="plaque-it-preview-wrap"><div class="plaque-it-preview"></div></div>
+		</div>
+		<?php
+	}
+
+	/** Render customer inputs above the add-to-cart button. */
+	public function render_controls(): void {
 		global $product;
 		if ( ! $product instanceof WC_Product || ! Plaque_It_Validator::is_enabled_product( $product->get_id() ) ) {
 			return;
@@ -55,24 +84,21 @@ class Plaque_It_Frontend {
 		?>
 		<div class="plaque-it-configurator" data-product-id="<?php echo esc_attr( $product_id ); ?>">
 			<h3><?php esc_html_e( 'Design Your Plaque', 'plaque-it' ); ?></h3>
-			<div class="plaque-it-layout">
-				<div class="plaque-it-controls">
-					<div class="plaque-it-row">
-						<label><?php esc_html_e( 'Width (mm)', 'plaque-it' ); ?><input type="number" class="plaque-it-width" min="<?php echo esc_attr( $min_w ); ?>" max="<?php echo esc_attr( $max_w ); ?>" step="1" value="<?php echo esc_attr( $min_w ); ?>" /></label>
-						<label><?php esc_html_e( 'Height (mm)', 'plaque-it' ); ?><input type="number" class="plaque-it-height" min="<?php echo esc_attr( $min_h ); ?>" max="<?php echo esc_attr( $max_h ); ?>" step="1" value="<?php echo esc_attr( $min_h ); ?>" /></label>
-					</div>
-					<label><?php esc_html_e( 'Corners', 'plaque-it' ); ?><select class="plaque-it-corner">
-						<?php foreach ( (array) $corners as $corner ) : ?>
-							<option value="<?php echo esc_attr( $corner ); ?>"><?php echo esc_html( ucwords( str_replace( '_', ' ', $corner ) ) ); ?></option>
-						<?php endforeach; ?>
-					</select></label>
-					<label><?php esc_html_e( 'Message', 'plaque-it' ); ?><textarea class="plaque-it-message" rows="4" placeholder="<?php esc_attr_e( 'Type each plaque line on a new line', 'plaque-it' ); ?>"></textarea></label>
-					<div class="plaque-it-lines"></div>
-					<p><label><input type="checkbox" class="plaque-it-approval" /> <?php esc_html_e( 'I approve the plaque preview.', 'plaque-it' ); ?></label></p>
-					<p class="plaque-it-price"></p>
-					<p class="plaque-it-errors" role="alert"></p>
+			<div class="plaque-it-controls">
+				<div class="plaque-it-row">
+					<label><?php esc_html_e( 'Width (mm)', 'plaque-it' ); ?><input type="number" class="plaque-it-width" min="<?php echo esc_attr( $min_w ); ?>" max="<?php echo esc_attr( $max_w ); ?>" step="1" value="<?php echo esc_attr( $min_w ); ?>" /></label>
+					<label><?php esc_html_e( 'Height (mm)', 'plaque-it' ); ?><input type="number" class="plaque-it-height" min="<?php echo esc_attr( $min_h ); ?>" max="<?php echo esc_attr( $max_h ); ?>" step="1" value="<?php echo esc_attr( $min_h ); ?>" /></label>
 				</div>
-				<div class="plaque-it-preview-wrap"><div class="plaque-it-preview"></div></div>
+				<label><?php esc_html_e( 'Corners', 'plaque-it' ); ?><select class="plaque-it-corner">
+					<?php foreach ( (array) $corners as $corner ) : ?>
+						<option value="<?php echo esc_attr( $corner ); ?>"><?php echo esc_html( ucwords( str_replace( '_', ' ', $corner ) ) ); ?></option>
+					<?php endforeach; ?>
+				</select></label>
+				<label><?php esc_html_e( 'Message', 'plaque-it' ); ?><textarea class="plaque-it-message" rows="4" placeholder="<?php esc_attr_e( 'Type each plaque line on a new line', 'plaque-it' ); ?>"></textarea></label>
+				<div class="plaque-it-lines"></div>
+				<p><label><input type="checkbox" class="plaque-it-approval" /> <?php esc_html_e( 'I approve the plaque preview.', 'plaque-it' ); ?></label></p>
+				<p class="plaque-it-price"></p>
+				<p class="plaque-it-errors" role="alert"></p>
 			</div>
 			<input type="hidden" name="_plaque_it_config" class="plaque-it-config-input" value="" />
 		</div>
