@@ -54,9 +54,11 @@ class Plaque_It_Frontend {
 		if ( ! $product instanceof WC_Product || ! Plaque_It_Validator::is_enabled_product( $product->get_id() ) ) {
 			return;
 		}
+
+		$config = $this->default_config( $product->get_id() );
 		?>
 		<div class="woocommerce-product-gallery plaque-it-gallery-preview" data-product-id="<?php echo esc_attr( $product->get_id() ); ?>">
-			<div class="plaque-it-preview-wrap"><div class="plaque-it-preview"></div></div>
+			<div class="plaque-it-preview-wrap"><div class="plaque-it-preview"><?php echo Plaque_It_Renderer::svg( $config ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div></div>
 		</div>
 		<?php
 	}
@@ -137,6 +139,21 @@ class Plaque_It_Frontend {
 			'variationData' => $colors,
 			'basePrice'     => $product ? (float) $product->get_price() : 0,
 			'currency'      => html_entity_decode( get_woocommerce_currency_symbol() ),
+		];
+	}
+
+	/** Build the default preview config shown before customer input. */
+	private function default_config( int $product_id ): array {
+		$settings = Plaque_It_Settings::all();
+		$corners  = (array) ( get_post_meta( $product_id, '_plaque_it_corner_styles', true ) ?: $settings['corner_styles'] );
+
+		return [
+			'width'            => (float) ( get_post_meta( $product_id, '_plaque_it_min_width', true ) ?: $settings['min_width'] ),
+			'height'           => (float) ( get_post_meta( $product_id, '_plaque_it_min_height', true ) ?: $settings['min_height'] ),
+			'corner_style'     => (string) ( $corners[0] ?? 'rounded' ),
+			'plaque_colour'    => get_post_meta( $product_id, '_plaque_it_plaque_colour', true ) ?: '#111111',
+			'engraving_colour' => get_post_meta( $product_id, '_plaque_it_engraving_colour', true ) ?: '#ffffff',
+			'lines'            => [],
 		];
 	}
 }
