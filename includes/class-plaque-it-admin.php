@@ -20,6 +20,7 @@ class Plaque_It_Admin {
 		add_action( 'woocommerce_product_after_variable_attributes', [ $this, 'variation_fields' ], 10, 3 );
 		add_action( 'woocommerce_save_product_variation', [ $this, 'save_variation_fields' ], 10, 2 );
 		add_action( 'admin_enqueue_scripts', [ $this, 'assets' ] );
+		add_action( 'wp_ajax_plaque_it_search_products', [ $this, 'ajax_search_products' ] );
 	}
 
 	/** Admin assets. */
@@ -32,6 +33,19 @@ class Plaque_It_Admin {
 		wp_enqueue_style( 'wp-color-picker' );
 		wp_enqueue_style( 'plaque-it-admin', PLAQUE_IT_URL . 'assets/css/plaque-it-admin.css', [], $css_ver );
 		wp_enqueue_script( 'plaque-it-admin', PLAQUE_IT_URL . 'assets/js/plaque-it-admin.js', [ 'jquery', 'wp-color-picker' ], $js_ver, true );
+		wp_localize_script(
+			'plaque-it-admin',
+			'plaqueItAdmin',
+			[
+				'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
+				'productsUrl'   => admin_url( 'admin.php?page=plaque-it-products' ),
+				'productNonce'  => wp_create_nonce( 'plaque_it_search_products' ),
+				'searching'     => __( 'Searching products...', 'plaque-it' ),
+				'noResults'     => __( 'No products found. Try a different name, SKU, or product ID.', 'plaque-it' ),
+				'searchPrompt'  => __( 'Start typing to search by product name, SKU, or ID.', 'plaque-it' ),
+				'searchMinimum' => __( 'Type at least 2 characters to search.', 'plaque-it' ),
+			]
+		);
 	}
 
 	/** Register menu. */
@@ -121,41 +135,64 @@ class Plaque_It_Admin {
 	/** Render products page. */
 	public function render_products(): void {
 		$this->notice();
-		$manual_id      = absint( $_GET['manual_product_id'] ?? 0 );
-		$product_id     = $manual_id ?: absint( $_GET['product_id'] ?? 0 );
-		$product_search = isset( $_GET['product_search'] ) ? sanitize_text_field( wp_unslash( $_GET['product_search'] ) ) : '';
-		$product        = $product_id ? wc_get_product( $product_id ) : null;
-		$settings       = Plaque_It_Settings::all();
-		$search_results = '' !== $product_search ? $this->search_products( $product_search ) : [];
+		$manual_id  = absint( $_GET['manual_product_id'] ?? 0 );
+		$product_id = $manual_id ?: absint( $_GET['product_id'] ?? 0 );
+		$product    = $product_id ? wc_get_product( $product_id ) : null;
+		$settings   = Plaque_It_Settings::all();
+		$conflict   = $product ? Plaque_It_Validator::has_personaliseit( $product_id ) : false;
+		$types      = wc_get_product_types();
 		?>
-		<div class="wrap plaque-it-admin">
-			<h1><?php esc_html_e( 'PlaqueIt Products', 'plaque-it' ); ?></h1>
-			<p><?php esc_html_e( 'Enable PlaqueIt only on plaque products. Products already configured in PersonaliseIt are blocked automatically.', 'plaque-it' ); ?></p>
-			<form method="get" class="plaque-it-card">
-				<input type="hidden" name="page" value="plaque-it-products" />
-				<label><?php esc_html_e( 'Search products', 'plaque-it' ); ?> <input type="search" name="product_search" value="<?php echo esc_attr( $product_search ); ?>" placeholder="<?php esc_attr_e( 'Name, SKU, or ID', 'plaque-it' ); ?>" /></label>
-				<?php if ( '' !== $product_search ) : ?>
-					<label><?php esc_html_e( 'Search results', 'plaque-it' ); ?>
-						<select name="product_id">
-							<option value="0"><?php esc_html_e( 'Choose a product...', 'plaque-it' ); ?></option>
-							<?php foreach ( $search_results as $result_id => $result_name ) : ?>
-								<option value="<?php echo esc_attr( $result_id ); ?>" <?php selected( $product_id, $result_id ); ?>><?php echo esc_html( $result_name ); ?></option>
-							<?php endforeach; ?>
-						</select>
-					</label>
-					<?php if ( empty( $search_results ) ) : ?>
-						<p><?php esc_html_e( 'No products found. Try a different name, SKU, or product ID.', 'plaque-it' ); ?></p>
-					<?php endif; ?>
-				<?php endif; ?>
-				<label><?php esc_html_e( 'Or enter Product ID', 'plaque-it' ); ?> <input type="number" name="manual_product_id" value="" /></label>
-				<?php submit_button( __( 'Load Product', 'plaque-it' ), 'secondary', '', false ); ?>
-			</form>
+		<div class="wrap plaque-it-admin plaque-it-products-page">
+			<div class="plaque-it-page-header">
+				<div>
+					<h1><?php esc_html_e( 'Product Assignments', 'plaque-it' ); ?></h1>
+					<p><?php esc_html_e( 'Search your WooCommerce catalogue and configure PlaqueIt on plaque products only.', 'plaque-it' ); ?></p>
+				</div>
+			</div>
+
+			<div class="plaque-it-products-layout">
+				<div class="plaque-it-card plaque-it-product-search-card">
+					<div class="plaque-it-card-header">
+						<h2><?php esc_html_e( 'Find a product', 'plaque-it' ); ?></h2>
+						<span><?php esc_html_e( 'Live catalogue search', 'plaque-it' ); ?></span>
+					</div>
+					<div class="plaque-it-card-body">
+						<label class="plaque-it-search-label" for="plaque-it-product-search"><?php esc_html_e( 'Search by product name, SKU, or ID', 'plaque-it' ); ?></label>
+						<input id="plaque-it-product-search" class="plaque-it-live-product-search" type="search" autocomplete="off" placeholder="<?php esc_attr_e( 'Start typing a product name...', 'plaque-it' ); ?>" />
+						<div class="plaque-it-live-results" aria-live="polite">
+							<div class="plaque-it-search-placeholder"><?php esc_html_e( 'Start typing to search by product name, SKU, or ID.', 'plaque-it' ); ?></div>
+						</div>
+						<form method="get" class="plaque-it-manual-load">
+							<input type="hidden" name="page" value="plaque-it-products" />
+							<label><?php esc_html_e( 'Know the Product ID?', 'plaque-it' ); ?> <input type="number" name="manual_product_id" value="" placeholder="<?php esc_attr_e( 'Product ID', 'plaque-it' ); ?>" /></label>
+							<?php submit_button( __( 'Load', 'plaque-it' ), 'secondary', '', false ); ?>
+						</form>
+					</div>
+				</div>
+
+				<div class="plaque-it-product-editor">
 			<?php if ( $product ) : ?>
-				<form method="post" class="plaque-it-card">
+				<form method="post" class="plaque-it-card plaque-it-product-settings-card">
 					<?php wp_nonce_field( 'plaque_it_save_product' ); ?>
 					<input type="hidden" name="product_id" value="<?php echo esc_attr( $product_id ); ?>" />
-					<h2><?php echo esc_html( $product->get_name() ); ?></h2>
-					<p><label><input type="checkbox" name="enabled" value="yes" <?php checked( Plaque_It_Validator::is_enabled_product( $product_id ) ); ?> /> <?php esc_html_e( 'Enable PlaqueIt', 'plaque-it' ); ?></label></p>
+					<div class="plaque-it-card-header plaque-it-product-editor-header">
+						<div>
+							<h2><?php echo esc_html( $product->get_name() ); ?></h2>
+							<span><?php echo esc_html( '#' . $product_id . ' - ' . ( $types[ $product->get_type() ] ?? $product->get_type() ) ); ?></span>
+						</div>
+						<?php if ( $conflict ) : ?>
+							<span class="plaque-it-status-badge plaque-it-status-conflict"><?php esc_html_e( 'PersonaliseIt conflict', 'plaque-it' ); ?></span>
+						<?php elseif ( Plaque_It_Validator::is_enabled_product( $product_id ) ) : ?>
+							<span class="plaque-it-status-badge plaque-it-status-enabled"><?php esc_html_e( 'Enabled', 'plaque-it' ); ?></span>
+						<?php else : ?>
+							<span class="plaque-it-status-badge plaque-it-status-disabled"><?php esc_html_e( 'Disabled', 'plaque-it' ); ?></span>
+						<?php endif; ?>
+					</div>
+					<div class="plaque-it-card-body">
+					<?php if ( $conflict ) : ?>
+						<p class="plaque-it-conflict"><?php esc_html_e( 'PersonaliseIt is already configured for this product. PlaqueIt cannot be enabled on the same product.', 'plaque-it' ); ?></p>
+					<?php endif; ?>
+					<p><label class="plaque-it-toggle-row"><input type="checkbox" name="enabled" value="yes" <?php checked( Plaque_It_Validator::is_enabled_product( $product_id ) ); ?> <?php disabled( $conflict ); ?> /> <?php esc_html_e( 'Enable PlaqueIt on this product', 'plaque-it' ); ?></label></p>
 					<div class="plaque-it-grid">
 						<?php $this->product_number_field( $product_id, 'min_width', __( 'Minimum width (mm)', 'plaque-it' ), $settings['min_width'] ); ?>
 						<?php $this->product_number_field( $product_id, 'max_width', __( 'Maximum width (mm)', 'plaque-it' ), $settings['max_width'] ); ?>
@@ -171,10 +208,37 @@ class Plaque_It_Admin {
 						<label><input type="checkbox" name="corner_styles[]" value="<?php echo esc_attr( $style ); ?>" <?php checked( in_array( $style, (array) $allowed, true ) ); ?> /> <?php echo esc_html( ucwords( $style ) ); ?></label><br />
 					<?php endforeach; ?>
 					<?php submit_button( __( 'Save Product Settings', 'plaque-it' ), 'primary', 'plaque_it_save_product' ); ?>
+					</div>
 				</form>
+			<?php else : ?>
+				<div class="plaque-it-card plaque-it-empty-product-card">
+					<div class="plaque-it-empty">
+						<span class="plaque-it-empty-icon">#</span>
+						<h3><?php esc_html_e( 'Select a product to configure', 'plaque-it' ); ?></h3>
+						<p><?php esc_html_e( 'Use live search to find a product, then enable PlaqueIt and set product-specific limits.', 'plaque-it' ); ?></p>
+					</div>
+				</div>
 			<?php endif; ?>
+				</div>
+			</div>
 		</div>
 		<?php
+	}
+
+	/** AJAX product search for the products admin page. */
+	public function ajax_search_products(): void {
+		check_ajax_referer( 'plaque_it_search_products', 'nonce' );
+
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_send_json_error( [ 'message' => __( 'You do not have permission to search products.', 'plaque-it' ) ], 403 );
+		}
+
+		$term = isset( $_GET['term'] ) ? sanitize_text_field( wp_unslash( $_GET['term'] ) ) : '';
+		if ( strlen( $term ) < 2 ) {
+			wp_send_json_success( [] );
+		}
+
+		wp_send_json_success( array_values( $this->search_products( $term ) ) );
 	}
 
 	/** Search WooCommerce products for the products admin page. */
@@ -182,6 +246,7 @@ class Plaque_It_Admin {
 		$data_store  = WC_Data_Store::load( 'product' );
 		$product_ids = $data_store->search_products( $term, '', false, true, 50 );
 		$products    = [];
+		$types       = wc_get_product_types();
 
 		foreach ( $product_ids as $product_id ) {
 			$product = wc_get_product( $product_id );
@@ -189,7 +254,19 @@ class Plaque_It_Admin {
 				continue;
 			}
 
-			$products[ $product_id ] = '#' . $product_id . ' - ' . $product->get_formatted_name();
+			$enabled  = Plaque_It_Validator::is_enabled_product( $product_id );
+			$conflict = Plaque_It_Validator::has_personaliseit( $product_id );
+
+			$products[ $product_id ] = [
+				'id'       => $product_id,
+				'name'     => $product->get_name(),
+				'sku'      => $product->get_sku(),
+				'type'     => $types[ $product->get_type() ] ?? $product->get_type(),
+				'status'   => $product->get_status(),
+				'enabled'  => $enabled,
+				'conflict' => $conflict,
+				'url'      => add_query_arg( [ 'page' => 'plaque-it-products', 'product_id' => $product_id ], admin_url( 'admin.php' ) ),
+			];
 		}
 
 		return $products;

@@ -14,6 +14,92 @@
       window.jQuery('.plaque-it-colour-field').wpColorPicker();
     }
 
+    const productSearch = document.querySelector('.plaque-it-live-product-search');
+    const productResults = document.querySelector('.plaque-it-live-results');
+    const config = window.plaqueItAdmin || {};
+
+    function escapeHtml(value) {
+      return String(value || '').replace(/[&<>'"]/g, function (char) {
+        return {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          "'": '&#039;',
+          '"': '&quot;',
+        }[char];
+      });
+    }
+
+    function statusLabel(product) {
+      if (product.conflict) return 'PersonaliseIt conflict';
+      if (product.enabled) return 'PlaqueIt enabled';
+      return 'Not enabled';
+    }
+
+    function renderProductResults(products) {
+      if (!productResults) return;
+      if (!products.length) {
+        productResults.innerHTML = '<div class="plaque-it-search-placeholder">' + escapeHtml(config.noResults || 'No products found.') + '</div>';
+        return;
+      }
+
+      productResults.innerHTML = products.map(function (product) {
+        const meta = ['#' + product.id, product.type, product.status].filter(Boolean).join(' - ');
+        const sku = product.sku ? '<span>SKU: ' + escapeHtml(product.sku) + '</span>' : '';
+        const badgeClass = product.conflict ? 'plaque-it-status-conflict' : (product.enabled ? 'plaque-it-status-enabled' : 'plaque-it-status-disabled');
+        return '<a class="plaque-it-product-result" href="' + escapeHtml(product.url) + '">' +
+          '<span class="plaque-it-product-result-main">' +
+            '<strong>' + escapeHtml(product.name) + '</strong>' +
+            '<small>' + escapeHtml(meta) + '</small>' +
+          '</span>' +
+          '<span class="plaque-it-product-result-meta">' + sku + '<span class="plaque-it-status-badge ' + badgeClass + '">' + escapeHtml(statusLabel(product)) + '</span></span>' +
+        '</a>';
+      }).join('');
+    }
+
+    if (productSearch && productResults && config.ajaxUrl) {
+      let searchTimer = null;
+      let controller = null;
+
+      productSearch.addEventListener('input', function () {
+        const term = productSearch.value.trim();
+        window.clearTimeout(searchTimer);
+
+        if (controller) controller.abort();
+        if (!term) {
+          productResults.innerHTML = '<div class="plaque-it-search-placeholder">' + escapeHtml(config.searchPrompt || 'Start typing to search.') + '</div>';
+          return;
+        }
+        if (term.length < 2) {
+          productResults.innerHTML = '<div class="plaque-it-search-placeholder">' + escapeHtml(config.searchMinimum || 'Type at least 2 characters to search.') + '</div>';
+          return;
+        }
+
+        searchTimer = window.setTimeout(function () {
+          controller = new AbortController();
+          productResults.innerHTML = '<div class="plaque-it-search-placeholder">' + escapeHtml(config.searching || 'Searching products...') + '</div>';
+
+          const params = new URLSearchParams({
+            action: 'plaque_it_search_products',
+            nonce: config.productNonce || '',
+            term: term,
+          });
+
+          fetch(config.ajaxUrl + '?' + params.toString(), {
+            credentials: 'same-origin',
+            signal: controller.signal,
+          }).then(function (response) {
+            return response.json();
+          }).then(function (payload) {
+            renderProductResults(payload && payload.success && Array.isArray(payload.data) ? payload.data : []);
+          }).catch(function (error) {
+            if (error.name === 'AbortError') return;
+            renderProductResults([]);
+          });
+        }, 250);
+      });
+    }
+
     const modal = document.querySelector('.plaque-it-modal-overlay');
     const uploadButton = document.querySelector('.plaque-it-upload-font-btn');
     if (!modal || !uploadButton) return;
