@@ -4,7 +4,7 @@ WooCommerce plaque customiser plugin with live previews, uploaded fonts, size-ba
 
 ## Plugin
 
-The WordPress plugin lives in `plaque-it/`.
+The WordPress plugin lives at the repository root. The main plugin file is `plaque-it.php`.
 
 ## Requirements
 
@@ -15,8 +15,8 @@ The WordPress plugin lives in `plaque-it/`.
 ## Development Checks
 
 ```bash
-phpunit -c plaque-it/phpunit.xml.dist
-npm --prefix plaque-it run lint:js
+phpunit -c phpunit.xml.dist
+npm run lint:js
 ```
 
 ## Notes

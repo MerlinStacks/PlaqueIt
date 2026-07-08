@@ -89,30 +89,33 @@ PlaqueIt should only render when the current product or selected variation has P
 Proposed structure:
 
 ```text
-plaque-it/
-  plaque-it.php
-  includes/
-    class-plaque-it.php
-    class-plaque-it-frontend.php
-    class-plaque-it-cart.php
-    class-plaque-it-admin.php
-    class-plaque-it-admin-products.php
-    class-plaque-it-admin-fonts.php
-    class-plaque-it-admin-order-metabox.php
-    class-plaque-it-print-generator.php
-    class-plaque-it-pricing.php
-    class-plaque-it-validator.php
-  assets/
-    js/plaque-it-frontend.js
-    css/plaque-it-frontend.css
-    js/plaque-it-admin-fonts.js
-    css/plaque-it-admin.css
-  templates/
-    plaque-configurator.php
-  readme.txt
-  composer.json
-  package.json
-  phpcs.xml
+plaque-it.php
+uninstall.php
+readme.txt
+composer.json
+package.json
+phpcs.xml.dist
+phpunit.xml.dist
+includes/
+  class-plaque-it.php
+  class-plaque-it-frontend.php
+  class-plaque-it-cart.php
+  class-plaque-it-admin.php
+  class-plaque-it-admin-order-metabox.php
+  class-plaque-it-db.php
+  class-plaque-it-files.php
+  class-plaque-it-fonts.php
+  class-plaque-it-pricing.php
+  class-plaque-it-renderer.php
+  class-plaque-it-settings.php
+  class-plaque-it-validator.php
+assets/
+  js/plaque-it-frontend.js
+  js/plaque-it-admin.js
+  css/plaque-it-frontend.css
+  css/plaque-it-admin.css
+tests/
+  Unit/
 ```
 
 ## Main Components

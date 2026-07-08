@@ -23,8 +23,8 @@ jobs:
           node-version: '20'
       - name: PHP syntax check
         run: |
-          find plaque-it -name '*.php' -not -path '*/vendor/*' -print0 | xargs -0 -n1 php -l
+          find . -name '*.php' -not -path './vendor/*' -not -path './node_modules/*' -print0 | xargs -0 -n1 php -l
       - name: JavaScript syntax check
-        run: npm --prefix plaque-it run lint:js
+        run: npm run lint:js
       - name: PHPUnit
-        run: phpunit -c plaque-it/phpunit.xml.dist
+        run: phpunit -c phpunit.xml.dist
