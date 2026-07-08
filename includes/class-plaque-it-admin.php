@@ -27,7 +27,8 @@ class Plaque_It_Admin {
 		wp_enqueue_style( 'wp-color-picker' );
 		wp_enqueue_style( 'plaque-it-admin', PLAQUE_IT_URL . 'assets/css/plaque-it-admin.css', [], PLAQUE_IT_VERSION );
 		wp_enqueue_script( 'wc-enhanced-select' );
-		wp_enqueue_script( 'plaque-it-admin', PLAQUE_IT_URL . 'assets/js/plaque-it-admin.js', [ 'jquery', 'wp-color-picker' ], PLAQUE_IT_VERSION, true );
+		wp_add_inline_script( 'wc-enhanced-select', 'jQuery(function($){$(document.body).trigger("wc-enhanced-select-init");});' );
+		wp_enqueue_script( 'plaque-it-admin', PLAQUE_IT_URL . 'assets/js/plaque-it-admin.js', [ 'jquery', 'wp-color-picker', 'wc-enhanced-select' ], PLAQUE_IT_VERSION, true );
 	}
 
 	/** Register menu. */
@@ -57,7 +58,7 @@ class Plaque_It_Admin {
 
 		if ( isset( $_POST['plaque_it_upload_font'] ) && check_admin_referer( 'plaque_it_upload_font' ) ) {
 			$error = Plaque_It_Fonts::upload( $_FILES['font_file'] ?? [], $_POST );
-			$this->redirect_notice( $error ? rawurlencode( $error ) : 'font-uploaded' );
+			$this->redirect_notice( $error ? rawurlencode( $error ) : 'font-uploaded', 'plaque-it-fonts' );
 		}
 
 		if ( isset( $_GET['page'], $_GET['plaque_it_toggle_font'], $_GET['_wpnonce'] ) && 'plaque-it-fonts' === $_GET['page'] ) {
@@ -128,7 +129,7 @@ class Plaque_It_Admin {
 			<form method="get" class="plaque-it-card">
 				<input type="hidden" name="page" value="plaque-it-products" />
 				<label><?php esc_html_e( 'Search products', 'plaque-it' ); ?>
-					<select class="wc-product-search" name="product_id" data-placeholder="<?php esc_attr_e( 'Search for a product...', 'plaque-it' ); ?>" data-action="woocommerce_json_search_products" data-allow_clear="true">
+					<select class="wc-product-search" name="product_id" style="width:360px;" data-placeholder="<?php esc_attr_e( 'Search for a product...', 'plaque-it' ); ?>" data-action="woocommerce_json_search_products" data-security="<?php echo esc_attr( wp_create_nonce( 'search-products' ) ); ?>" data-allow_clear="true">
 						<?php if ( $product ) : ?>
 							<option value="<?php echo esc_attr( $product->get_id() ); ?>" selected="selected"><?php echo esc_html( '#' . $product->get_id() . ' - ' . $product->get_name() ); ?></option>
 						<?php endif; ?>

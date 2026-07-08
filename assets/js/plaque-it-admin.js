@@ -1,48 +1,84 @@
 (function () {
-  if (typeof window === 'undefined' || !window.jQuery) return;
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
-  window.jQuery(function ($) {
-    $('.plaque-it-colour-field').wpColorPicker();
+  function ready(callback) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', callback);
+      return;
+    }
+    callback();
+  }
 
-    const $modal = $('.plaque-it-modal-overlay');
-    const $fileInput = $modal.find('input[type="file"]');
-    const $nameInput = $modal.find('input[name="name"]');
-    const $preview = $modal.find('.plaque-it-upload-preview span');
+  ready(function () {
+    if (window.jQuery && window.jQuery.fn.wpColorPicker) {
+      window.jQuery('.plaque-it-colour-field').wpColorPicker();
+    }
+
+    const modal = document.querySelector('.plaque-it-modal-overlay');
+    const uploadButton = document.querySelector('.plaque-it-upload-font-btn');
+    if (!modal || !uploadButton) return;
+
+    const form = modal.querySelector('form');
+    const fileInput = modal.querySelector('input[type="file"]');
+    const nameInput = modal.querySelector('input[name="name"]');
+    const weightInput = modal.querySelector('select[name="weight"]');
+    const styleInput = modal.querySelector('select[name="style"]');
+    const preview = modal.querySelector('.plaque-it-upload-preview span');
+    const closeButtons = modal.querySelectorAll('.plaque-it-modal-close, .plaque-it-modal-cancel');
 
     function openModal() {
-      $modal.prop('hidden', false);
-      $('body').addClass('plaque-it-modal-open');
+      modal.hidden = false;
+      modal.removeAttribute('hidden');
+      document.body.classList.add('plaque-it-modal-open');
+      if (fileInput) fileInput.focus();
     }
 
     function closeModal() {
-      $modal.prop('hidden', true);
-      $('body').removeClass('plaque-it-modal-open');
-      $modal.find('form')[0]?.reset();
-      $preview.css({ fontFamily: '', fontWeight: '', fontStyle: '' });
+      modal.hidden = true;
+      modal.setAttribute('hidden', 'hidden');
+      document.body.classList.remove('plaque-it-modal-open');
+      if (form) form.reset();
+      if (preview) {
+        preview.style.fontFamily = '';
+        preview.style.fontWeight = '';
+        preview.style.fontStyle = '';
+      }
     }
 
     function filenameToTitle(name) {
       return String(name || '').replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
-    $('.plaque-it-upload-font-btn').on('click', openModal);
-    $('.plaque-it-modal-close, .plaque-it-modal-cancel').on('click', closeModal);
-    $modal.on('click', function (event) {
-      if (event.target === this) closeModal();
+    uploadButton.addEventListener('click', openModal);
+    closeButtons.forEach(function (button) {
+      button.addEventListener('click', closeModal);
+    });
+    modal.addEventListener('click', function (event) {
+      if (event.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !modal.hidden) closeModal();
     });
 
-    $fileInput.on('change', function () {
-      const file = this.files && this.files[0];
+    if (!fileInput) return;
+    fileInput.addEventListener('change', function () {
+      const file = fileInput.files && fileInput.files[0];
       if (!file) return;
-      if (!$nameInput.val()) $nameInput.val(filenameToTitle(file.name));
-      if (!window.FontFace) return;
+      if (nameInput && !nameInput.value) nameInput.value = filenameToTitle(file.name);
+      if (!window.FontFace || !window.FileReader || !preview) return;
+
       const reader = new FileReader();
       reader.onload = function () {
         const family = 'PlaqueItUploadPreview';
-        const face = new FontFace(family, reader.result);
+        const face = new FontFace(family, reader.result, {
+          weight: weightInput ? weightInput.value : '400',
+          style: styleInput ? styleInput.value : 'normal',
+        });
         face.load().then(function (loadedFace) {
           document.fonts.add(loadedFace);
-          $preview.css('fontFamily', family + ', sans-serif');
+          preview.style.fontFamily = family + ', sans-serif';
+          preview.style.fontWeight = weightInput ? weightInput.value : '400';
+          preview.style.fontStyle = styleInput ? styleInput.value : 'normal';
         }).catch(function () {});
       };
       reader.readAsArrayBuffer(file);
