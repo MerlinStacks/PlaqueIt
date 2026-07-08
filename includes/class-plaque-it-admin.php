@@ -20,15 +20,21 @@ class Plaque_It_Admin {
 		add_action( 'woocommerce_product_after_variable_attributes', [ $this, 'variation_fields' ], 10, 3 );
 		add_action( 'woocommerce_save_product_variation', [ $this, 'save_variation_fields' ], 10, 2 );
 		add_action( 'admin_enqueue_scripts', [ $this, 'assets' ] );
+		add_action( 'wp_ajax_plaque_it_json_search_products', [ $this, 'json_search_products' ] );
 	}
 
 	/** Admin assets. */
 	public function assets(): void {
+		$css_file = PLAQUE_IT_PATH . 'assets/css/plaque-it-admin.css';
+		$js_file  = PLAQUE_IT_PATH . 'assets/js/plaque-it-admin.js';
+		$css_ver  = file_exists( $css_file ) ? (string) filemtime( $css_file ) : PLAQUE_IT_VERSION;
+		$js_ver   = file_exists( $js_file ) ? (string) filemtime( $js_file ) : PLAQUE_IT_VERSION;
+
 		wp_enqueue_style( 'wp-color-picker' );
-		wp_enqueue_style( 'plaque-it-admin', PLAQUE_IT_URL . 'assets/css/plaque-it-admin.css', [], PLAQUE_IT_VERSION );
+		wp_enqueue_style( 'plaque-it-admin', PLAQUE_IT_URL . 'assets/css/plaque-it-admin.css', [], $css_ver );
 		wp_enqueue_script( 'wc-enhanced-select' );
 		wp_add_inline_script( 'wc-enhanced-select', 'jQuery(function($){$(document.body).trigger("wc-enhanced-select-init");});' );
-		wp_enqueue_script( 'plaque-it-admin', PLAQUE_IT_URL . 'assets/js/plaque-it-admin.js', [ 'jquery', 'wp-color-picker', 'wc-enhanced-select' ], PLAQUE_IT_VERSION, true );
+		wp_enqueue_script( 'plaque-it-admin', PLAQUE_IT_URL . 'assets/js/plaque-it-admin.js', [ 'jquery', 'wp-color-picker', 'wc-enhanced-select' ], $js_ver, true );
 	}
 
 	/** Register menu. */
@@ -129,7 +135,7 @@ class Plaque_It_Admin {
 			<form method="get" class="plaque-it-card">
 				<input type="hidden" name="page" value="plaque-it-products" />
 				<label><?php esc_html_e( 'Search products', 'plaque-it' ); ?>
-					<select class="wc-product-search" name="product_id" style="width:360px;" data-placeholder="<?php esc_attr_e( 'Search for a product...', 'plaque-it' ); ?>" data-action="woocommerce_json_search_products" data-security="<?php echo esc_attr( wp_create_nonce( 'search-products' ) ); ?>" data-allow_clear="true">
+					<select class="wc-product-search" name="product_id" style="width:360px;" data-placeholder="<?php esc_attr_e( 'Search for a product...', 'plaque-it' ); ?>" data-action="plaque_it_json_search_products" data-security="<?php echo esc_attr( wp_create_nonce( 'plaque_it_search_products' ) ); ?>" data-allow_clear="true">
 						<?php if ( $product ) : ?>
 							<option value="<?php echo esc_attr( $product->get_id() ); ?>" selected="selected"><?php echo esc_html( '#' . $product->get_id() . ' - ' . $product->get_name() ); ?></option>
 						<?php endif; ?>
@@ -163,6 +169,35 @@ class Plaque_It_Admin {
 			<?php endif; ?>
 		</div>
 		<?php
+	}
+
+	/** AJAX product search for the products admin page. */
+	public function json_search_products(): void {
+		check_ajax_referer( 'plaque_it_search_products', 'security' );
+
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_send_json_error( __( 'You do not have permission to search products.', 'plaque-it' ), 403 );
+		}
+
+		$term = isset( $_GET['term'] ) ? sanitize_text_field( wp_unslash( $_GET['term'] ) ) : '';
+		if ( '' === $term ) {
+			wp_send_json( [] );
+		}
+
+		$data_store  = WC_Data_Store::load( 'product' );
+		$product_ids = $data_store->search_products( $term, '', false, true, 50 );
+		$products    = [];
+
+		foreach ( $product_ids as $product_id ) {
+			$product = wc_get_product( $product_id );
+			if ( ! $product ) {
+				continue;
+			}
+
+			$products[ $product_id ] = '#' . $product_id . ' - ' . $product->get_formatted_name();
+		}
+
+		wp_send_json( $products );
 	}
 
 	/** Render fonts page. */
