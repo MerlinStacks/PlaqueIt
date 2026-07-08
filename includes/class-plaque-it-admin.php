@@ -14,11 +14,6 @@ class Plaque_It_Admin {
 	public function register(): void {
 		add_action( 'admin_menu', [ $this, 'menu' ] );
 		add_action( 'admin_init', [ $this, 'handle_posts' ] );
-		add_filter( 'woocommerce_product_data_tabs', [ $this, 'product_data_tab' ] );
-		add_action( 'woocommerce_product_data_panels', [ $this, 'product_data_panel' ] );
-		add_action( 'woocommerce_process_product_meta', [ $this, 'save_product_data_panel' ] );
-		add_action( 'woocommerce_product_after_variable_attributes', [ $this, 'variation_fields' ], 10, 3 );
-		add_action( 'woocommerce_save_product_variation', [ $this, 'save_variation_fields' ], 10, 2 );
 		add_action( 'admin_enqueue_scripts', [ $this, 'assets' ] );
 		add_action( 'wp_ajax_plaque_it_search_products', [ $this, 'ajax_search_products' ] );
 	}
@@ -199,9 +194,25 @@ class Plaque_It_Admin {
 						<?php $this->product_number_field( $product_id, 'min_height', __( 'Minimum height (mm)', 'plaque-it' ), $settings['min_height'] ); ?>
 						<?php $this->product_number_field( $product_id, 'max_height', __( 'Maximum height (mm)', 'plaque-it' ), $settings['max_height'] ); ?>
 						<?php $this->product_number_field( $product_id, 'max_lines', __( 'Max lines', 'plaque-it' ), $settings['max_lines'], 1 ); ?>
-						<label><?php esc_html_e( 'Fallback plaque colour', 'plaque-it' ); ?><input type="text" name="plaque_colour" value="<?php echo esc_attr( get_post_meta( $product_id, '_plaque_it_plaque_colour', true ) ?: '#111111' ); ?>" /></label>
-						<label><?php esc_html_e( 'Fallback engraving colour', 'plaque-it' ); ?><input type="text" name="engraving_colour" value="<?php echo esc_attr( get_post_meta( $product_id, '_plaque_it_engraving_colour', true ) ?: '#ffffff' ); ?>" /></label>
+						<?php $this->colour_field( 'plaque_colour', __( 'Fallback plaque colour', 'plaque-it' ), get_post_meta( $product_id, '_plaque_it_plaque_colour', true ) ?: '#111111', '#111111' ); ?>
+						<?php $this->colour_field( 'engraving_colour', __( 'Fallback engraving colour', 'plaque-it' ), get_post_meta( $product_id, '_plaque_it_engraving_colour', true ) ?: '#ffffff', '#ffffff' ); ?>
 					</div>
+					<?php if ( $product instanceof WC_Product_Variable ) : ?>
+						<h3><?php esc_html_e( 'Variation Colours', 'plaque-it' ); ?></h3>
+						<div class="plaque-it-grid">
+							<?php foreach ( $product->get_children() as $variation_id ) : ?>
+								<?php $variation = wc_get_product( $variation_id ); ?>
+								<?php if ( ! $variation ) : ?>
+									<?php continue; ?>
+								<?php endif; ?>
+								<div class="plaque-it-variation-colours">
+									<strong><?php echo esc_html( $variation->get_name() ); ?></strong>
+									<?php $this->colour_field( 'variation_plaque_colour[' . $variation_id . ']', __( 'Plaque colour', 'plaque-it' ), get_post_meta( $variation_id, '_plaque_it_plaque_colour', true ) ?: '#111111', '#111111' ); ?>
+									<?php $this->colour_field( 'variation_engraving_colour[' . $variation_id . ']', __( 'Engraving colour', 'plaque-it' ), get_post_meta( $variation_id, '_plaque_it_engraving_colour', true ) ?: '#ffffff', '#ffffff' ); ?>
+								</div>
+							<?php endforeach; ?>
+						</div>
+					<?php endif; ?>
 					<h3><?php esc_html_e( 'Allowed Corner Styles', 'plaque-it' ); ?></h3>
 					<?php $allowed = get_post_meta( $product_id, '_plaque_it_corner_styles', true ) ?: $settings['corner_styles']; ?>
 					<?php foreach ( [ 'scallop', 'straight', 'none', 'rounded' ] as $style ) : ?>
@@ -432,99 +443,6 @@ class Plaque_It_Admin {
 		<?php
 	}
 
-	/** Variation fields. */
-	public function variation_fields( int $loop, array $variation_data, WP_Post $variation ): void {
-		unset( $variation_data );
-		woocommerce_wp_text_input( [ 'id' => "plaque_it_plaque_colour_{$loop}", 'name' => "plaque_it_plaque_colour[{$variation->ID}]", 'label' => __( 'Plaque colour', 'plaque-it' ), 'value' => get_post_meta( $variation->ID, '_plaque_it_plaque_colour', true ), 'placeholder' => '#111111', 'wrapper_class' => 'form-row form-row-first', 'class' => 'plaque-it-colour-field' ] );
-		woocommerce_wp_text_input( [ 'id' => "plaque_it_engraving_colour_{$loop}", 'name' => "plaque_it_engraving_colour[{$variation->ID}]", 'label' => __( 'Engraving colour', 'plaque-it' ), 'value' => get_post_meta( $variation->ID, '_plaque_it_engraving_colour', true ), 'placeholder' => '#ffffff', 'wrapper_class' => 'form-row form-row-last', 'class' => 'plaque-it-colour-field' ] );
-	}
-
-	/** Add product data tab. */
-	public function product_data_tab( array $tabs ): array {
-		$tabs['plaque_it'] = [
-			'label'    => __( 'PlaqueIt', 'plaque-it' ),
-			'target'   => 'plaque_it_product_data',
-			'class'    => [],
-			'priority' => 80,
-		];
-		return $tabs;
-	}
-
-	/** Render product data panel. */
-	public function product_data_panel(): void {
-		global $post;
-		if ( ! $post instanceof WP_Post ) {
-			return;
-		}
-
-		$product_id = $post->ID;
-		$settings   = Plaque_It_Settings::all();
-		$allowed    = get_post_meta( $product_id, '_plaque_it_corner_styles', true ) ?: $settings['corner_styles'];
-		$conflict   = Plaque_It_Validator::has_personaliseit( $product_id );
-		?>
-		<div id="plaque_it_product_data" class="panel woocommerce_options_panel hidden">
-			<?php if ( $conflict ) : ?>
-				<p class="plaque-it-conflict"><?php esc_html_e( 'PersonaliseIt is already configured for this product. PlaqueIt cannot be enabled on the same product.', 'plaque-it' ); ?></p>
-			<?php endif; ?>
-			<?php
-			woocommerce_wp_checkbox(
-				[
-					'id'          => '_plaque_it_enabled',
-					'label'       => __( 'Enable PlaqueIt', 'plaque-it' ),
-					'description' => __( 'Show the plaque configurator on this product.', 'plaque-it' ),
-					'value'       => $conflict ? 'no' : get_post_meta( $product_id, '_plaque_it_enabled', true ),
-				]
-			);
-			woocommerce_wp_text_input( [ 'id' => '_plaque_it_min_width', 'label' => __( 'Minimum width (mm)', 'plaque-it' ), 'type' => 'number', 'custom_attributes' => [ 'step' => '0.1' ], 'value' => get_post_meta( $product_id, '_plaque_it_min_width', true ) ?: $settings['min_width'] ] );
-			woocommerce_wp_text_input( [ 'id' => '_plaque_it_max_width', 'label' => __( 'Maximum width (mm)', 'plaque-it' ), 'type' => 'number', 'custom_attributes' => [ 'step' => '0.1' ], 'value' => get_post_meta( $product_id, '_plaque_it_max_width', true ) ?: $settings['max_width'] ] );
-			woocommerce_wp_text_input( [ 'id' => '_plaque_it_min_height', 'label' => __( 'Minimum height (mm)', 'plaque-it' ), 'type' => 'number', 'custom_attributes' => [ 'step' => '0.1' ], 'value' => get_post_meta( $product_id, '_plaque_it_min_height', true ) ?: $settings['min_height'] ] );
-			woocommerce_wp_text_input( [ 'id' => '_plaque_it_max_height', 'label' => __( 'Maximum height (mm)', 'plaque-it' ), 'type' => 'number', 'custom_attributes' => [ 'step' => '0.1' ], 'value' => get_post_meta( $product_id, '_plaque_it_max_height', true ) ?: $settings['max_height'] ] );
-			woocommerce_wp_text_input( [ 'id' => '_plaque_it_max_lines', 'label' => __( 'Max lines', 'plaque-it' ), 'type' => 'number', 'custom_attributes' => [ 'step' => '1' ], 'value' => get_post_meta( $product_id, '_plaque_it_max_lines', true ) ?: $settings['max_lines'] ] );
-			woocommerce_wp_text_input( [ 'id' => '_plaque_it_plaque_colour', 'label' => __( 'Fallback plaque colour', 'plaque-it' ), 'description' => __( 'Used for simple products and before a variation is selected.', 'plaque-it' ), 'value' => get_post_meta( $product_id, '_plaque_it_plaque_colour', true ) ?: '#111111', 'placeholder' => '#111111', 'class' => 'plaque-it-colour-field' ] );
-			woocommerce_wp_text_input( [ 'id' => '_plaque_it_engraving_colour', 'label' => __( 'Fallback engraving colour', 'plaque-it' ), 'description' => __( 'Used for simple products and before a variation is selected.', 'plaque-it' ), 'value' => get_post_meta( $product_id, '_plaque_it_engraving_colour', true ) ?: '#ffffff', 'placeholder' => '#ffffff', 'class' => 'plaque-it-colour-field' ] );
-			?>
-			<p class="form-field"><label><?php esc_html_e( 'Corner styles', 'plaque-it' ); ?></label>
-				<span class="wrap">
-					<?php foreach ( [ 'scallop', 'straight', 'none', 'rounded' ] as $style ) : ?>
-						<label style="margin-right:12px;"><input type="checkbox" name="_plaque_it_corner_styles[]" value="<?php echo esc_attr( $style ); ?>" <?php checked( in_array( $style, (array) $allowed, true ) ); ?> /> <?php echo esc_html( ucwords( $style ) ); ?></label>
-					<?php endforeach; ?>
-				</span>
-			</p>
-		</div>
-		<?php
-	}
-
-	/** Save product data panel. */
-	public function save_product_data_panel( int $product_id ): void {
-		$enabled = empty( $_POST['_plaque_it_enabled'] ) ? 'no' : 'yes';
-		if ( 'yes' === $enabled && Plaque_It_Validator::has_personaliseit( $product_id ) ) {
-			$enabled = 'no';
-		}
-		update_post_meta( $product_id, '_plaque_it_enabled', $enabled );
-
-		foreach ( [ 'min_width', 'max_width', 'min_height', 'max_height', 'max_lines' ] as $key ) {
-			$field = '_plaque_it_' . $key;
-			update_post_meta( $product_id, $field, (float) ( $_POST[ $field ] ?? 0 ) );
-		}
-
-		$plaque_colour    = sanitize_hex_color( wp_unslash( $_POST['_plaque_it_plaque_colour'] ?? '' ) ) ?: '#111111';
-		$engraving_colour = sanitize_hex_color( wp_unslash( $_POST['_plaque_it_engraving_colour'] ?? '' ) ) ?: '#ffffff';
-		update_post_meta( $product_id, '_plaque_it_plaque_colour', $plaque_colour );
-		update_post_meta( $product_id, '_plaque_it_engraving_colour', $engraving_colour );
-
-		$styles = isset( $_POST['_plaque_it_corner_styles'] ) && is_array( $_POST['_plaque_it_corner_styles'] ) ? array_map( 'sanitize_key', wp_unslash( $_POST['_plaque_it_corner_styles'] ) ) : [];
-		update_post_meta( $product_id, '_plaque_it_corner_styles', array_values( array_intersect( $styles, [ 'scallop', 'straight', 'none', 'rounded' ] ) ) );
-	}
-
-	/** Save variation fields. */
-	public function save_variation_fields( int $variation_id, int $i ): void {
-		unset( $i );
-		$plaque = isset( $_POST['plaque_it_plaque_colour'][ $variation_id ] ) ? sanitize_hex_color( wp_unslash( $_POST['plaque_it_plaque_colour'][ $variation_id ] ) ) : '';
-		$engrave = isset( $_POST['plaque_it_engraving_colour'][ $variation_id ] ) ? sanitize_hex_color( wp_unslash( $_POST['plaque_it_engraving_colour'][ $variation_id ] ) ) : '';
-		update_post_meta( $variation_id, '_plaque_it_plaque_colour', $plaque ?: '#111111' );
-		update_post_meta( $variation_id, '_plaque_it_engraving_colour', $engrave ?: '#ffffff' );
-	}
-
 	/** Save product settings. */
 	private function save_product(): string {
 		$product_id = absint( $_POST['product_id'] ?? 0 );
@@ -545,6 +463,20 @@ class Plaque_It_Admin {
 		$engraving_colour = sanitize_hex_color( wp_unslash( $_POST['engraving_colour'] ?? '' ) ) ?: '#ffffff';
 		update_post_meta( $product_id, '_plaque_it_plaque_colour', $plaque_colour );
 		update_post_meta( $product_id, '_plaque_it_engraving_colour', $engraving_colour );
+
+		$product = wc_get_product( $product_id );
+		if ( $product instanceof WC_Product_Variable ) {
+			$variation_plaque   = isset( $_POST['variation_plaque_colour'] ) && is_array( $_POST['variation_plaque_colour'] ) ? wp_unslash( $_POST['variation_plaque_colour'] ) : [];
+			$variation_engrave  = isset( $_POST['variation_engraving_colour'] ) && is_array( $_POST['variation_engraving_colour'] ) ? wp_unslash( $_POST['variation_engraving_colour'] ) : [];
+			$allowed_variations = array_map( 'absint', $product->get_children() );
+
+			foreach ( $allowed_variations as $variation_id ) {
+				$plaque  = sanitize_hex_color( (string) ( $variation_plaque[ $variation_id ] ?? '' ) ) ?: '#111111';
+				$engrave = sanitize_hex_color( (string) ( $variation_engrave[ $variation_id ] ?? '' ) ) ?: '#ffffff';
+				update_post_meta( $variation_id, '_plaque_it_plaque_colour', $plaque );
+				update_post_meta( $variation_id, '_plaque_it_engraving_colour', $engrave );
+			}
+		}
 
 		$styles = isset( $_POST['corner_styles'] ) && is_array( $_POST['corner_styles'] ) ? array_map( 'sanitize_key', wp_unslash( $_POST['corner_styles'] ) ) : [];
 		update_post_meta( $product_id, '_plaque_it_corner_styles', array_values( array_intersect( $styles, [ 'scallop', 'straight', 'none', 'rounded' ] ) ) );
@@ -593,6 +525,11 @@ class Plaque_It_Admin {
 	private function product_number_field( int $product_id, string $name, string $label, mixed $default, mixed $step = '0.1' ): void {
 		$value = get_post_meta( $product_id, '_plaque_it_' . $name, true );
 		$this->number_field( $name, $label, '' === $value ? $default : $value, $step );
+	}
+
+	/** Colour picker field. */
+	private function colour_field( string $name, string $label, string $value, string $default ): void {
+		echo '<label class="plaque-it-colour-label">' . esc_html( $label ) . '<input class="plaque-it-colour-field" type="text" name="' . esc_attr( $name ) . '" value="' . esc_attr( $value ) . '" data-default-color="' . esc_attr( $default ) . '" /></label>';
 	}
 
 	/** Redirect with notice. */

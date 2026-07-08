@@ -90,6 +90,21 @@
   margin-top: 4px;
 }
 
+.plaque-it-grid .wp-picker-container {
+  display: block;
+  margin-top: 4px;
+}
+
+.plaque-it-grid .wp-picker-container input.wp-color-picker {
+  display: inline-block;
+  width: 80px;
+  margin-top: 0;
+}
+
+.plaque-it-grid .wp-picker-container .button {
+  margin-top: 0;
+}
+
 .plaque-it-page-header {
   display: flex;
   align-items: flex-start;
