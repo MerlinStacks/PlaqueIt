@@ -84,6 +84,18 @@
     };
   }
 
+  function clampNumberInputs(root) {
+    root.querySelectorAll('input[type="number"]').forEach((input) => {
+      if (input.value === '') return;
+      const value = Number(input.value);
+      if (!Number.isFinite(value)) return;
+      const min = input.min === '' ? null : Number(input.min);
+      const max = input.max === '' ? null : Number(input.max);
+      if (max !== null && value > max) input.value = String(max);
+      if (min !== null && value < min) input.value = String(min);
+    });
+  }
+
   function validate(config) {
     const errors = [];
     if (config.width < Number(settings.min_width) || config.width > Number(settings.max_width)) errors.push('Width is outside the allowed range.');
@@ -107,9 +119,6 @@
   }
 
   function render(root, config) {
-    const preview = document.querySelector(`.plaque-it-gallery-preview[data-product-id="${root.dataset.productId}"] .plaque-it-preview`) || root.querySelector('.plaque-it-preview');
-    if (!preview) return;
-
     const w = Math.max(1, mmToPx(config.width));
     const h = Math.max(1, mmToPx(config.height));
     let y = h / 2;
@@ -122,10 +131,19 @@
       y += Number(line.size) * 0.25;
       return out;
     }).join('');
-    preview.innerHTML = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${shape(config.corner_style, w, h, config.plaque_colour)}${text}</svg>`;
+    const svg = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${shape(config.corner_style, w, h, config.plaque_colour)}${text}</svg>`;
+    const previews = document.querySelectorAll(`.plaque-it-preview[data-product-id="${root.dataset.productId}"]`);
+    if (previews.length) {
+      previews.forEach((preview) => { preview.innerHTML = svg; });
+      return;
+    }
+
+    const preview = root.querySelector('.plaque-it-preview');
+    if (preview) preview.innerHTML = svg;
   }
 
   function update(root) {
+    clampNumberInputs(root);
     const messageLines = root.querySelector('.plaque-it-message').value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
     if (messageLines.length !== root.querySelectorAll('.plaque-it-line').length) lineRows(root, messageLines);
     const config = getConfig(root);
@@ -139,14 +157,23 @@
     render(root, config);
   }
 
-  document.querySelectorAll('.plaque-it-configurator').forEach((root) => {
-    root.addEventListener('input', () => update(root));
-    root.addEventListener('change', () => update(root));
-    const variationInput = document.querySelector('input.variation_id');
-    if (variationInput) variationInput.addEventListener('change', () => setTimeout(() => update(root), 0));
-    if (window.jQuery) {
-      window.jQuery(document.body).on('found_variation reset_data', () => setTimeout(() => update(root), 0));
-    }
-    update(root);
-  });
+  function init() {
+    document.querySelectorAll('.plaque-it-configurator:not([data-plaque-it-ready])').forEach((root) => {
+      root.dataset.plaqueItReady = '1';
+      root.addEventListener('input', () => update(root));
+      root.addEventListener('change', () => update(root));
+      const variationInput = document.querySelector('input.variation_id');
+      if (variationInput) variationInput.addEventListener('change', () => setTimeout(() => update(root), 0));
+      if (window.jQuery) {
+        window.jQuery(document.body).on('found_variation reset_data', () => setTimeout(() => update(root), 0));
+      }
+      update(root);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();

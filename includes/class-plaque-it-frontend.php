@@ -58,7 +58,7 @@ class Plaque_It_Frontend {
 		$config = $this->default_config( $product->get_id() );
 		?>
 		<div class="woocommerce-product-gallery plaque-it-gallery-preview" data-product-id="<?php echo esc_attr( $product->get_id() ); ?>">
-			<div class="plaque-it-preview-wrap"><div class="plaque-it-preview"><?php echo Plaque_It_Renderer::svg( $config ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div></div>
+			<div class="plaque-it-preview-wrap"><div class="plaque-it-preview" data-product-id="<?php echo esc_attr( $product->get_id() ); ?>"><?php echo Plaque_It_Renderer::svg( $config ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></div></div>
 		</div>
 		<?php
 	}
@@ -86,6 +86,7 @@ class Plaque_It_Frontend {
 		?>
 		<div class="plaque-it-configurator" data-product-id="<?php echo esc_attr( $product_id ); ?>">
 			<h3><?php esc_html_e( 'Design Your Plaque', 'plaque-it' ); ?></h3>
+			<p class="plaque-it-errors" role="alert" aria-live="polite"></p>
 			<div class="plaque-it-controls">
 				<div class="plaque-it-row">
 					<label><?php esc_html_e( 'Width (mm)', 'plaque-it' ); ?><input type="number" class="plaque-it-width" min="<?php echo esc_attr( $min_w ); ?>" max="<?php echo esc_attr( $max_w ); ?>" step="1" value="<?php echo esc_attr( $min_w ); ?>" /></label>
@@ -100,7 +101,6 @@ class Plaque_It_Frontend {
 				<div class="plaque-it-lines"></div>
 				<p><label><input type="checkbox" class="plaque-it-approval" /> <?php esc_html_e( 'I approve the plaque preview.', 'plaque-it' ); ?></label></p>
 				<p class="plaque-it-price"></p>
-				<p class="plaque-it-errors" role="alert"></p>
 			</div>
 			<input type="hidden" name="_plaque_it_config" class="plaque-it-config-input" value="" />
 		</div>
